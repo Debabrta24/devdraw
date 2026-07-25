@@ -2,6 +2,7 @@ import { useRef, useEffect } from "react";
 
 const STROKES_KEY = "drawing_canvas_strokes";
 const VIEW_KEY = "drawing_canvas_view";
+const SAVE_DEBOUNCE_MS = 300;
 
 export default function Canvas() {
   const canvasRef = useRef(null);
@@ -18,10 +19,65 @@ export default function Canvas() {
 
   const dirty = useRef(true);
 
+  // Lock the page down so mobile browsers don't hijack pinch/scroll
+  // gestures before they reach the canvas.
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+
+    const prev = {
+      htmlTouch: html.style.touchAction,
+      bodyTouch: body.style.touchAction,
+      bodyOverflow: body.style.overflow,
+      bodyMargin: body.style.margin,
+      bodyOverscroll: body.style.overscrollBehavior,
+      htmlOverscroll: html.style.overscrollBehavior,
+    };
+
+    html.style.touchAction = "none";
+    body.style.touchAction = "none";
+    body.style.overflow = "hidden";
+    body.style.margin = "0";
+    body.style.overscrollBehavior = "none";
+    html.style.overscrollBehavior = "none";
+
+    // Force the viewport meta to disable native pinch-zoom, so gestures
+    // are handled by our own pointer logic instead of the browser.
+    let meta = document.querySelector('meta[name="viewport"]');
+    let createdMeta = false;
+    const prevMetaContent = meta ? meta.getAttribute("content") : null;
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "viewport";
+      document.head.appendChild(meta);
+      createdMeta = true;
+    }
+    meta.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    );
+
+    return () => {
+      html.style.touchAction = prev.htmlTouch;
+      body.style.touchAction = prev.bodyTouch;
+      body.style.overflow = prev.bodyOverflow;
+      body.style.margin = prev.bodyMargin;
+      body.style.overscrollBehavior = prev.bodyOverscroll;
+      html.style.overscrollBehavior = prev.htmlOverscroll;
+      if (createdMeta) {
+        meta.remove();
+      } else if (prevMetaContent !== null) {
+        meta.setAttribute("content", prevMetaContent);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     let rafId;
+    let saveStrokesTimer = null;
+    let saveViewTimer = null;
 
     function markDirty() {
       dirty.current = true;
@@ -73,16 +129,24 @@ export default function Canvas() {
       }
     }
 
+    // Debounced saves so fast gestures (wheel zoom, pinch, drawing)
+    // never block the main thread with synchronous localStorage writes.
     function saveStrokes() {
-      try {
-        localStorage.setItem(STROKES_KEY, JSON.stringify(strokes.current));
-      } catch {}
+      clearTimeout(saveStrokesTimer);
+      saveStrokesTimer = setTimeout(() => {
+        try {
+          localStorage.setItem(STROKES_KEY, JSON.stringify(strokes.current));
+        } catch {}
+      }, SAVE_DEBOUNCE_MS);
     }
 
     function saveView() {
-      try {
-        localStorage.setItem(VIEW_KEY, JSON.stringify(view.current));
-      } catch {}
+      clearTimeout(saveViewTimer);
+      saveViewTimer = setTimeout(() => {
+        try {
+          localStorage.setItem(VIEW_KEY, JSON.stringify(view.current));
+        } catch {}
+      }, SAVE_DEBOUNCE_MS);
     }
 
     // restore
@@ -188,6 +252,7 @@ export default function Canvas() {
         view.current.x = mid.x - worldX * newScale;
         view.current.y = mid.y - worldY * newScale;
         markDirty();
+        saveView();
       } else if (drawing.current && currentStroke.current) {
         const w = toWorld(pos.x, pos.y);
         currentStroke.current.points.push({
@@ -256,6 +321,8 @@ export default function Canvas() {
       canvas.removeEventListener("pointerleave", pointerUp);
       canvas.removeEventListener("wheel", wheel);
       cancelAnimationFrame(rafId);
+      clearTimeout(saveStrokesTimer);
+      clearTimeout(saveViewTimer);
     };
   }, []);
 
