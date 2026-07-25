@@ -19,6 +19,24 @@ export default function Canvas() {
 
   const dirty = useRef(true);
 
+  const [bgColor, setBgcolor] = useState("blue");
+  const [linecolor, setLinecolor] = useState("green");
+
+  // Refs mirroring the color state so the render loop (set up once in the
+  // effect below) always reads the *current* colors instead of the values
+  // captured at mount time.
+  const bgColorRef = useRef(bgColor);
+  const lineColorRef = useRef(linecolor);
+
+  useEffect(() => {
+    bgColorRef.current = bgColor;
+    dirty.current = true; // force a repaint so the new bg shows immediately
+  }, [bgColor]);
+
+  useEffect(() => {
+    lineColorRef.current = linecolor;
+  }, [linecolor]);
+
   // Lock the page down so mobile browsers don't hijack pinch/scroll
   // gestures before they reach the canvas.
   useEffect(() => {
@@ -102,7 +120,7 @@ export default function Canvas() {
       const { x, y, scale } = view.current;
 
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.fillStyle = "#050505";
+      ctx.fillStyle = bgColorRef.current;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       ctx.setTransform(dpr * scale, 0, 0, dpr * scale, x * dpr, y * dpr);
@@ -214,7 +232,7 @@ export default function Canvas() {
         drawing.current = true;
         const w = toWorld(pos.x, pos.y);
         currentStroke.current = {
-          color: "#04de37",
+          color: lineColorRef.current,
           points: [{ x: w.x, y: w.y, pressure: pos.pressure }],
         };
         markDirty();
@@ -325,12 +343,11 @@ export default function Canvas() {
       clearTimeout(saveViewTimer);
     };
   }, []);
-    const [data, setData] = useState({});
-  
-    const sentValu = (value) => {
-      console.log(value);
-      setData(value);
-    };
+
+  const sentValu = (value) => {
+    setBgcolor(value.backgroundColor);
+    setLinecolor(value.fillColor);
+  };
 
   return (
     <>
@@ -342,7 +359,7 @@ export default function Canvas() {
           height: "100vh",
           display: "block",
           touchAction: "none",
-          background: "#130248",
+          background: "#a5a5a5",
           cursor: "mouse",
         }}
       />
