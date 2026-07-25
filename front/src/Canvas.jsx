@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react";
 
+
 export default function Canvas() {
   const canvasRef = useRef(null);
 
@@ -12,6 +13,7 @@ export default function Canvas() {
 
     function resize() {
       const dpr = window.devicePixelRatio || 1;
+
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
 
@@ -22,12 +24,11 @@ export default function Canvas() {
 
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      ctx.strokeStyle = "#26da0a";
+      ctx.strokeStyle = "#04de37";
       ctx.lineWidth = 1;
     }
 
     resize();
-
     window.addEventListener("resize", resize);
 
     return () => window.removeEventListener("resize", resize);
@@ -45,13 +46,8 @@ export default function Canvas() {
 
   function pointerDown(e) {
     e.preventDefault();
-
-    const canvas = canvasRef.current;
-
-    canvas.setPointerCapture(e.pointerId);
-
+    canvasRef.current.setPointerCapture(e.pointerId);
     drawing.current = true;
-
     lastPoint.current = getPos(e);
   }
 
@@ -59,10 +55,9 @@ export default function Canvas() {
     if (!drawing.current) return;
 
     const ctx = canvasRef.current.getContext("2d");
-
     const p = getPos(e);
 
-    ctx.lineWidth = 2 + p.pressure * 5;
+    ctx.lineWidth = 3 + p.pressure * 1.2;
 
     ctx.beginPath();
     ctx.moveTo(lastPoint.current.x, lastPoint.current.y);
@@ -90,7 +85,7 @@ export default function Canvas() {
         height: "100vh",
         display: "block",
         touchAction: "none",
-        background: "#171717",
+        background: "#fff",
         cursor: "crosshair",
       }}
     />
