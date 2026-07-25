@@ -1,52 +1,30 @@
 import { useRef, useEffect } from "react";
 
-const STORAGE_KEY = "drawing_canvas_data";
-const MIN_SCALE = 0.1;
-const MAX_SCALE = 8;
+const STROKES_KEY = "drawing_canvas_strokes";
+const VIEW_KEY = "drawing_canvas_view";
 
 export default function Canvas() {
   const canvasRef = useRef(null);
+  const rectRef = useRef({ left: 0, top: 0 });
 
-  // viewport: world -> screen is  screen = world*scale + offset
-  const viewport = useRef({ scale: 1, x: 0, y: 0 });
-
-  const strokes = useRef([]); // finished strokes: [{ points: [{x,y,width}] }]
+  const strokes = useRef([]); // {points:[{x,y,pressure}], color}
   const currentStroke = useRef(null);
 
+  const view = useRef({ x: 0, y: 0, scale: 1 }); // screen = world*scale + offset
+
   const drawing = useRef(false);
-  const pointers = useRef(new Map()); // pointerId -> {x, y}
-  const pinch = useRef(null); // { prevDist, prevMid }
+  const activePointers = useRef(new Map()); // pointerId -> {x,y}
+  const pinch = useRef(null);
+
+  const dirty = useRef(true);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
+    let rafId;
 
-    function redraw() {
-      const dpr = window.devicePixelRatio || 1;
-      const vp = viewport.current;
-
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-
-      ctx.setTransform(dpr * vp.scale, 0, 0, dpr * vp.scale, dpr * vp.x, dpr * vp.y);
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = "#04de37";
-
-      const all = currentStroke.current
-        ? [...strokes.current, currentStroke.current]
-        : strokes.current;
-
-      for (const stroke of all) {
-        const pts = stroke.points;
-        for (let i = 1; i < pts.length; i++) {
-          ctx.lineWidth = pts[i].width;
-          ctx.beginPath();
-          ctx.moveTo(pts[i - 1].x, pts[i - 1].y);
-          ctx.lineTo(pts[i].x, pts[i].y);
-          ctx.stroke();
-        }
-      }
+    function markDirty() {
+      dirty.current = true;
     }
 
     function resize() {
@@ -55,179 +33,229 @@ export default function Canvas() {
       canvas.height = window.innerHeight * dpr;
       canvas.style.width = window.innerWidth + "px";
       canvas.style.height = window.innerHeight + "px";
-      redraw();
+      rectRef.current = canvas.getBoundingClientRect();
+      markDirty();
     }
 
-    function saveCanvas() {
-      try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ strokes: strokes.current, viewport: viewport.current })
-        );
-      } catch {
-        // storage unavailable, ignore
+    function render() {
+      rafId = requestAnimationFrame(render);
+      if (!dirty.current) return;
+      dirty.current = false;
+
+      const dpr = window.devicePixelRatio || 1;
+      const { x, y, scale } = view.current;
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "#050505";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, x * dpr, y * dpr);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      const all = currentStroke.current
+        ? [...strokes.current, currentStroke.current]
+        : strokes.current;
+
+      for (const s of all) {
+        const pts = s.points;
+        if (pts.length < 2) continue;
+        ctx.strokeStyle = s.color;
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1];
+          const b = pts[i];
+          ctx.lineWidth = 3 + b.pressure * 1.2;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
       }
     }
 
-    function loadCanvas() {
+    function saveStrokes() {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        strokes.current = parsed.strokes || [];
-        viewport.current = parsed.viewport || { scale: 1, x: 0, y: 0 };
-      } catch {
-        // ignore corrupt/missing data
-      }
+        localStorage.setItem(STROKES_KEY, JSON.stringify(strokes.current));
+      } catch {}
     }
 
-    function getWorldPos(e) {
-      const rect = canvas.getBoundingClientRect();
-      const sx = e.clientX - rect.left;
-      const sy = e.clientY - rect.top;
-      const vp = viewport.current;
+    function saveView() {
+      try {
+        localStorage.setItem(VIEW_KEY, JSON.stringify(view.current));
+      } catch {}
+    }
+
+    // restore
+    try {
+      const savedStrokes = localStorage.getItem(STROKES_KEY);
+      if (savedStrokes) strokes.current = JSON.parse(savedStrokes);
+      const savedView = localStorage.getItem(VIEW_KEY);
+      if (savedView) view.current = JSON.parse(savedView);
+    } catch {}
+
+    resize();
+    window.addEventListener("resize", resize);
+    rafId = requestAnimationFrame(render);
+
+    function toWorld(sx, sy) {
+      const { x, y, scale } = view.current;
+      return { x: (sx - x) / scale, y: (sy - y) / scale };
+    }
+
+    function getScreenPos(e) {
+      const rect = rectRef.current;
       return {
-        x: (sx - vp.x) / vp.scale,
-        y: (sy - vp.y) / vp.scale,
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
         pressure: e.pressure || 0.5,
       };
     }
 
-    function widthFor(pressure) {
-      return (1 + pressure * 0) / viewport.current.scale;
+    function dist(p1, p2) {
+      return Math.hypot(p1.x - p2.x, p1.y - p2.y);
     }
 
-    function pinchInfo() {
-      const pts = [...pointers.current.values()];
-      const [a, b] = pts;
-      const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      return { dist, mid };
+    function midpoint(p1, p2) {
+      return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
     }
 
-    function handlePinchMove() {
-      const { dist, mid } = pinchInfo();
-      const rect = canvas.getBoundingClientRect();
-      const midLocal = { x: mid.x - rect.left, y: mid.y - rect.top };
-      const vp = viewport.current;
-      const p = pinch.current;
-
-      const scaleFactor = dist / p.prevDist;
-      const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, vp.scale * scaleFactor));
-
-      const worldX = (midLocal.x - vp.x) / vp.scale;
-      const worldY = (midLocal.y - vp.y) / vp.scale;
-
-      vp.scale = newScale;
-      vp.x = midLocal.x - worldX * newScale;
-      vp.y = midLocal.y - worldY * newScale;
-
-      p.prevDist = dist;
-      p.prevMid = mid;
-      redraw();
+    function startPinch() {
+      const pts = [...activePointers.current.values()];
+      pinch.current = {
+        startDist: dist(pts[0], pts[1]),
+        startScale: view.current.scale,
+        startMid: midpoint(pts[0], pts[1]),
+        startViewX: view.current.x,
+        startViewY: view.current.y,
+      };
     }
 
-    function endStroke() {
-      if (currentStroke.current) {
-        if (currentStroke.current.points.length === 1) {
-          const pt = currentStroke.current.points[0];
-          currentStroke.current.points.push({ ...pt, x: pt.x + 0.01, y: pt.y + 0.01 });
-        }
+    function endCurrentStroke() {
+      if (currentStroke.current && currentStroke.current.points.length > 1) {
         strokes.current.push(currentStroke.current);
-        currentStroke.current = null;
-        saveCanvas();
+        saveStrokes();
       }
+      currentStroke.current = null;
       drawing.current = false;
+      markDirty();
     }
 
     function pointerDown(e) {
-      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-      if (e.pointerType === "touch" && pointers.current.size === 2) {
-        // second finger down -> switch to pinch, cancel any drawing
-        endStroke();
-        pinch.current = { ...pinchInfo(), prevDist: pinchInfo().dist, prevMid: pinchInfo().mid };
-        return;
-      }
-      if (e.pointerType === "touch" && pointers.current.size > 2) return;
-
-      e.preventDefault();
       canvas.setPointerCapture(e.pointerId);
-      const p = getWorldPos(e);
-      drawing.current = true;
-      currentStroke.current = { points: [{ x: p.x, y: p.y, width: widthFor(p.pressure) }] };
+      const pos = getScreenPos(e);
+      activePointers.current.set(e.pointerId, pos);
+
+      if (activePointers.current.size === 1) {
+        e.preventDefault();
+        drawing.current = true;
+        const w = toWorld(pos.x, pos.y);
+        currentStroke.current = {
+          color: "#04de37",
+          points: [{ x: w.x, y: w.y, pressure: pos.pressure }],
+        };
+        markDirty();
+      } else if (activePointers.current.size === 2) {
+        e.preventDefault();
+        endCurrentStroke();
+        startPinch();
+      }
     }
 
     function pointerMove(e) {
-      if (!pointers.current.has(e.pointerId)) return;
-      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!activePointers.current.has(e.pointerId)) return;
+      e.preventDefault();
+      const pos = getScreenPos(e);
+      activePointers.current.set(e.pointerId, pos);
 
-      if (pointers.current.size >= 2 && pinch.current) {
-        handlePinchMove();
-        return;
+      if (activePointers.current.size >= 2 && pinch.current) {
+        const pts = [...activePointers.current.values()];
+        const d = dist(pts[0], pts[1]);
+        const mid = midpoint(pts[0], pts[1]);
+        const scaleFactor = d / pinch.current.startDist;
+        const newScale = Math.min(
+          Math.max(pinch.current.startScale * scaleFactor, 0.1),
+          20
+        );
+
+        const worldX =
+          (pinch.current.startMid.x - pinch.current.startViewX) /
+          pinch.current.startScale;
+        const worldY =
+          (pinch.current.startMid.y - pinch.current.startViewY) /
+          pinch.current.startScale;
+
+        view.current.scale = newScale;
+        view.current.x = mid.x - worldX * newScale;
+        view.current.y = mid.y - worldY * newScale;
+        markDirty();
+      } else if (drawing.current && currentStroke.current) {
+        const w = toWorld(pos.x, pos.y);
+        currentStroke.current.points.push({
+          x: w.x,
+          y: w.y,
+          pressure: pos.pressure,
+        });
+        markDirty();
       }
-
-      if (!drawing.current || !currentStroke.current) return;
-      const p = getWorldPos(e);
-      currentStroke.current.points.push({ x: p.x, y: p.y, width: widthFor(p.pressure) });
-      redraw();
     }
 
     function pointerUp(e) {
-      pointers.current.delete(e.pointerId);
+      activePointers.current.delete(e.pointerId);
 
-      if (pointers.current.size < 2) {
+      if (activePointers.current.size < 2 && pinch.current) {
         pinch.current = null;
+        saveView();
       }
-      if (drawing.current) {
-        endStroke();
-        redraw();
+      if (activePointers.current.size === 0 && drawing.current) {
+        endCurrentStroke();
+      }
+      if (activePointers.current.size === 1 && pinch.current === null) {
+        // one finger left after a pinch — don't resume drawing from it
+        drawing.current = false;
+        currentStroke.current = null;
       }
     }
 
     function wheel(e) {
       e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const cx = e.clientX - rect.left;
-      const cy = e.clientY - rect.top;
-      const vp = viewport.current;
-
       if (e.ctrlKey || e.metaKey) {
+        const rect = rectRef.current;
+        const sx = e.clientX - rect.left;
+        const sy = e.clientY - rect.top;
+        const factor = Math.exp(-e.deltaY * 0.01);
         const newScale = Math.min(
-          MAX_SCALE,
-          Math.max(MIN_SCALE, vp.scale * Math.pow(1.0015, -e.deltaY))
+          Math.max(view.current.scale * factor, 0.1),
+          20
         );
-        const worldX = (cx - vp.x) / vp.scale;
-        const worldY = (cy - vp.y) / vp.scale;
-        vp.scale = newScale;
-        vp.x = cx - worldX * newScale;
-        vp.y = cy - worldY * newScale;
+        const worldX = (sx - view.current.x) / view.current.scale;
+        const worldY = (sy - view.current.y) / view.current.scale;
+        view.current.scale = newScale;
+        view.current.x = sx - worldX * newScale;
+        view.current.y = sy - worldY * newScale;
       } else {
-        vp.x -= e.deltaX;
-        vp.y -= e.deltaY;
+        view.current.x -= e.deltaX;
+        view.current.y -= e.deltaY;
       }
-      redraw();
+      markDirty();
+      saveView();
     }
 
-    loadCanvas();
-    resize();
-    window.addEventListener("resize", resize);
-    canvas.addEventListener("wheel", wheel, { passive: false });
-
-    canvas.addEventListener("pointerdown", pointerDown);
-    canvas.addEventListener("pointermove", pointerMove);
+    canvas.addEventListener("pointerdown", pointerDown, { passive: false });
+    canvas.addEventListener("pointermove", pointerMove, { passive: false });
     canvas.addEventListener("pointerup", pointerUp);
-    canvas.addEventListener("pointerleave", pointerUp);
     canvas.addEventListener("pointercancel", pointerUp);
+    canvas.addEventListener("pointerleave", pointerUp);
+    canvas.addEventListener("wheel", wheel, { passive: false });
 
     return () => {
       window.removeEventListener("resize", resize);
-      canvas.removeEventListener("wheel", wheel);
       canvas.removeEventListener("pointerdown", pointerDown);
       canvas.removeEventListener("pointermove", pointerMove);
       canvas.removeEventListener("pointerup", pointerUp);
-      canvas.removeEventListener("pointerleave", pointerUp);
       canvas.removeEventListener("pointercancel", pointerUp);
+      canvas.removeEventListener("pointerleave", pointerUp);
+      canvas.removeEventListener("wheel", wheel);
+      cancelAnimationFrame(rafId);
     };
   }, []);
 
