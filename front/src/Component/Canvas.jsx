@@ -345,6 +345,7 @@ export default function Canvas() {
   }, []);
 
   const sentValu = (value) => {
+    console.log(value)
     setBgcolor(value.backgroundColor);
     setLinecolor(value.fillColor);
   };

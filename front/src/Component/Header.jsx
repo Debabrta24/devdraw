@@ -18,27 +18,46 @@ const Header = ({ sentValu }) => {
   const [fillColor, setFillColor] = useState("#ff0000");
   const [backgroundColor, setBackgroundColor] = useState("#ffffff");
   const [file, setFile] = useState(null);
+  const [opacity, setOpacity] = useState(100);
+  const [stockWidth, setStockWidth] = useState(2);
 
   // which flyout / popover is currently open ("view" | "shapes" | "draw" | "colors" | null)
   const [openPanel, setOpenPanel] = useState(null);
+
+  // true while a native color input is focused/active — while true we ignore
+  // the outside-click handler so picking a color never gets cut off/closed early
+  const [colorPickerActive, setColorPickerActive] = useState(false);
 
   const photoref = useRef(null);
   const wrapperRef = useRef(null);
 
   useEffect(() => {
-    sentValu({ selectedTool, fillColor, backgroundColor, file });
-  }, [selectedTool, fillColor, backgroundColor, file]);
+    sentValu({
+      selectedTool,
+      fillColor,
+      backgroundColor,
+      file,
+      opacity,
+      stockWidth,
+    });
+  }, [selectedTool, fillColor, backgroundColor, file, opacity, stockWidth]);
 
-  // close any open flyout / popover when clicking outside the toolbar
+  // close any open flyout / popover when clicking outside the toolbar.
+  // uses the "click" event (not "mousedown") on purpose: a click always fires
+  // AFTER any blur caused by the focus shift, so colorPickerActive has already
+  // settled to false by the time we check it here — letting the user swipe
+  // freely through the native color picker without the panel closing mid-drag,
+  // while a click on the canvas right after still closes it reliably.
   useEffect(() => {
     const handleClickOutside = (e) => {
+      if (colorPickerActive) return;
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
         setOpenPanel(null);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, [colorPickerActive]);
 
   // ---- standalone tools (not grouped) ----
   const standalone = {
@@ -87,10 +106,6 @@ const Header = ({ sentValu }) => {
     setSelectedTool(toolId);
     setOpenPanel(null);
   };
-
-  // returns the icon to show on a group's main button:
-  // the currently selected tool's icon if it belongs to that group,
-  // otherwise the group's first option icon (sensible default)
   const groupMainIcon = (group) => {
     const active = group.options.find((o) => o.id === selectedTool);
     return active ? active.icon : group.options[0].icon;
@@ -142,6 +157,7 @@ const Header = ({ sentValu }) => {
             {lock ? <CiLock size={20} /> : <CiUnlock size={20} />}
           </button>
 
+          {/* view group: cursor / hand */}
           <div className="relative">
             <button
               onClick={() => togglePanel("view")}
@@ -171,6 +187,7 @@ const Header = ({ sentValu }) => {
             )}
           </div>
 
+          {/* shapes group: rectangle / circle / line */}
           <div className="relative">
             <button
               onClick={() => togglePanel("shapes")}
@@ -200,6 +217,7 @@ const Header = ({ sentValu }) => {
             )}
           </div>
 
+          {/* draw group: text / pencil */}
           <div className="relative">
             <button
               onClick={() => togglePanel("draw")}
@@ -229,6 +247,7 @@ const Header = ({ sentValu }) => {
             )}
           </div>
 
+          {/* eraser (standalone) */}
           <button
             onClick={() => setSelectedTool(standalone.eraser.id)}
             className={buttonBaseClass(selectedTool === standalone.eraser.id)}
@@ -237,6 +256,7 @@ const Header = ({ sentValu }) => {
             {standalone.eraser.icon}
           </button>
 
+          {/* image (standalone) */}
           <button
             onClick={() => photoref.current.click()}
             className={buttonBaseClass(false)}
@@ -245,6 +265,7 @@ const Header = ({ sentValu }) => {
             {standalone.image.icon}
           </button>
 
+          {/* colors group: fill + background merged into one button */}
           <div className="relative">
             <button
               onClick={() => togglePanel("colors")}
@@ -294,6 +315,8 @@ const Header = ({ sentValu }) => {
                       type="color"
                       value={fillColor}
                       onChange={(e) => setFillColor(e.target.value)}
+                      onFocus={() => setColorPickerActive(true)}
+                      onBlur={() => setColorPickerActive(false)}
                       className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                     />
                   </label>
@@ -311,6 +334,30 @@ const Header = ({ sentValu }) => {
                         style={{ backgroundColor: c }}
                       />
                     ))}
+                  </div>
+
+                  {/* Opacity */}
+                  <div className="mb-3">
+                    <div className="mb-1 flex items-center justify-between">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        Opacity
+                      </p>
+                      <span className="rounded-md bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-300">
+                        {opacity}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={opacity}
+                      onChange={(e) => setOpacity(Number(e.target.value))}
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-full accent-blue-500"
+                      style={{
+                        background: `linear-gradient(90deg, ${fillColor} 0%, ${fillColor} ${opacity}%, #3f3f46 ${opacity}%, #3f3f46 100%)`,
+                      }}
+                    />
                   </div>
 
                   {/* Background color */}
@@ -332,6 +379,8 @@ const Header = ({ sentValu }) => {
                       type="color"
                       value={backgroundColor}
                       onChange={(e) => setBackgroundColor(e.target.value)}
+                      onFocus={() => setColorPickerActive(true)}
+                      onBlur={() => setColorPickerActive(false)}
                       className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                     />
                   </label>
@@ -349,6 +398,32 @@ const Header = ({ sentValu }) => {
                         style={{ backgroundColor: c }}
                       />
                     ))}
+                  </div>
+
+                  {/* Stroke / Stock width */}
+                  <div className="mt-3">
+                    <div className="mb-1 flex items-center justify-between">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        Stroke Width
+                      </p>
+                      <span className="rounded-md bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-gray-300">
+                        {stockWidth}px
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={20}
+                      step={1}
+                      value={stockWidth}
+                      onChange={(e) => setStockWidth(Number(e.target.value))}
+                      className="h-1.5 w-full cursor-pointer appearance-none rounded-full accent-blue-500"
+                      style={{
+                        background: `linear-gradient(90deg, #3b82f6 0%, #3b82f6 ${
+                          (stockWidth / 20) * 100
+                        }%, #3f3f46 ${(stockWidth / 20) * 100}%, #3f3f46 100%)`,
+                      }}
+                    />
                   </div>
                 </div>
               </div>
