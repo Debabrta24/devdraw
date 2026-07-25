@@ -1,5 +1,5 @@
-import { useRef, useEffect } from "react";
-
+import { useRef, useEffect, useState } from "react";
+import Header from "./Header";
 const STROKES_KEY = "drawing_canvas_strokes";
 const VIEW_KEY = "drawing_canvas_view";
 const SAVE_DEBOUNCE_MS = 300;
@@ -54,7 +54,7 @@ export default function Canvas() {
     }
     meta.setAttribute(
       "content",
-      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
     );
 
     return () => {
@@ -238,7 +238,7 @@ export default function Canvas() {
         const scaleFactor = d / pinch.current.startDist;
         const newScale = Math.min(
           Math.max(pinch.current.startScale * scaleFactor, 0.1),
-          20
+          20,
         );
 
         const worldX =
@@ -290,7 +290,7 @@ export default function Canvas() {
         const factor = Math.exp(-e.deltaY * 0.01);
         const newScale = Math.min(
           Math.max(view.current.scale * factor, 0.1),
-          20
+          20,
         );
         const worldX = (sx - view.current.x) / view.current.scale;
         const worldY = (sy - view.current.y) / view.current.scale;
@@ -325,18 +325,27 @@ export default function Canvas() {
       clearTimeout(saveViewTimer);
     };
   }, []);
+    const [data, setData] = useState({});
+  
+    const sentValu = (value) => {
+      console.log(value);
+      setData(value);
+    };
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        width: "100vw",
-        height: "100vh",
-        display: "block",
-        touchAction: "none",
-        background: "#130248",
-        cursor: "mouse",
-      }}
-    />
+    <>
+      <Header sentValu={sentValu} />
+      <canvas
+        ref={canvasRef}
+        style={{
+          width: "100vw",
+          height: "100vh",
+          display: "block",
+          touchAction: "none",
+          background: "#130248",
+          cursor: "mouse",
+        }}
+      />
+    </>
   );
 }

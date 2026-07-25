@@ -1,23 +1,7 @@
-// import React, { useState } from "react";
-// import Footer from "./Component/Footer";
-
-// function App() {
-//   const [x, setX] = useState(0);
-
-//   return (
-//     <>
-//       <h1>{x}</h1>
-
-//       <Footer sendX={setX} />
-//     </>
-//   );
-// }
-
-// export default App;
 
 import React, { useState } from "react";
 import Header from "./Component/Header";
-
+import Canvas from "./Component/Canvas"
 const App = () => {
   const [data, setData] = useState({});
 
@@ -27,7 +11,8 @@ const App = () => {
   };
   return (
     <>
-      <Header sentValu={sentValu} />
+      {/* <Header sentValu={sentValu} /> */}
+      <Canvas/>
     </>
   );
 };
