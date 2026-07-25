@@ -12,7 +12,6 @@ export default function Canvas() {
 
     function resize() {
       const dpr = window.devicePixelRatio || 1;
-
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
 
@@ -23,8 +22,8 @@ export default function Canvas() {
 
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      ctx.strokeStyle = "#000";
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#908888";
+      ctx.lineWidth =2 ;
     }
 
     resize();
@@ -91,7 +90,7 @@ export default function Canvas() {
         height: "100vh",
         display: "block",
         touchAction: "none",
-        background: "#ffffff",
+        background: "#950e0e",
         cursor: "crosshair",
       }}
     />
