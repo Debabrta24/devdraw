@@ -22,8 +22,8 @@ export default function Canvas() {
 
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      ctx.strokeStyle = "#908888";
-      ctx.lineWidth =2 ;
+      ctx.strokeStyle = "#26da0a";
+      ctx.lineWidth = 1;
     }
 
     resize();
@@ -90,7 +90,7 @@ export default function Canvas() {
         height: "100vh",
         display: "block",
         touchAction: "none",
-        background: "#950e0e",
+        background: "#171717",
         cursor: "crosshair",
       }}
     />
