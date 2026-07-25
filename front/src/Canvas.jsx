@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react";
 
+const STORAGE_KEY = "drawing_canvas_bitmap";
 
 export default function Canvas() {
   const canvasRef = useRef(null);
@@ -21,22 +22,31 @@ export default function Canvas() {
       canvas.style.height = window.innerHeight + "px";
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.strokeStyle = "#04de37";
       ctx.lineWidth = 1;
+
+      // Restore saved bitmap
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const img = new Image();
+        img.onload = () => ctx.drawImage(img, 0, 0, window.innerWidth, window.innerHeight);
+        img.src = saved;
+      }
     }
 
     resize();
     window.addEventListener("resize", resize);
-
     return () => window.removeEventListener("resize", resize);
   }, []);
 
+  function saveCanvas() {
+    localStorage.setItem(STORAGE_KEY, canvasRef.current.toDataURL("image/png"));
+  }
+
   function getPos(e) {
     const rect = canvasRef.current.getBoundingClientRect();
-
     return {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
@@ -45,6 +55,10 @@ export default function Canvas() {
   }
 
   function pointerDown(e) {
+    // Ignore second finger. This prevents drawing with two fingers,
+    // but it does NOT implement pinch zoom.
+    if (e.pointerType === "touch" && !e.isPrimary) return;
+
     e.preventDefault();
     canvasRef.current.setPointerCapture(e.pointerId);
     drawing.current = true;
@@ -68,6 +82,7 @@ export default function Canvas() {
   }
 
   function pointerUp() {
+    if (drawing.current) saveCanvas();
     drawing.current = false;
     lastPoint.current = null;
   }
