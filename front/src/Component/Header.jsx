@@ -1,4 +1,5 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+
 import { CiUnlock, CiLock, CiText, CiEraser } from "react-icons/ci";
 import { HiOutlineCursorArrowRays } from "react-icons/hi2";
 import { FaRegCircle, FaRegHandPaper } from "react-icons/fa";
@@ -8,137 +9,351 @@ import {
   MdOutlineWaterDrop,
   MdCheckBoxOutlineBlank,
 } from "react-icons/md";
-import { IoArrowForwardOutline } from "react-icons/io5";
-import { TbStrokeStraight, TbBackground } from "react-icons/tb";
+import { IoArrowForwardOutline, IoChevronForward } from "react-icons/io5";
+import { TbStrokeStraight } from "react-icons/tb";
 
-const Header = () => {
+const Header = ({ sentValu }) => {
   const [lock, setLock] = useState(false);
   const [selectedTool, setSelectedTool] = useState("pencil");
   const [fillColor, setFillColor] = useState("#ff0000");
   const [backgroundColor, setBackgroundColor] = useState("#ffffff");
+  const [file, setFile] = useState(null);
 
-  const fillRef = useRef(null);
-  const backgroundRef = useRef(null);
-  console.log(selectedTool);
+  // which flyout / popover is currently open ("view" | "shapes" | "draw" | "colors" | null)
+  const [openPanel, setOpenPanel] = useState(null);
 
-  const drawcolor = ({}) => {
-    return (
-      <>
-        <p>jhug</p>
-      </>
-    );
+  const photoref = useRef(null);
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    sentValu({ selectedTool, fillColor, backgroundColor, file });
+  }, [selectedTool, fillColor, backgroundColor, file]);
+
+  // close any open flyout / popover when clicking outside the toolbar
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpenPanel(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // ---- standalone tools (not grouped) ----
+  const standalone = {
+    eraser: { id: "eraser", icon: <CiEraser size={20} /> },
+    image: { id: "image", icon: <MdOutlinePhoto size={20} /> },
   };
-  const backGroundColor = () => {};
-  const tools = [
-    {
-      id: "lock",
-      icon: lock ? <CiLock size={20} /> : <CiUnlock size={20} />,
-      action: () => setLock(!lock),
-    },
-    {
-      id: "cursor",
-      icon: <HiOutlineCursorArrowRays size={20} />,
-    },
-    {
-      id: "hand",
-      icon: <FaRegHandPaper size={22} />,
-    },
-    {
-      id: "rectangle",
-      icon: <MdCheckBoxOutlineBlank size={20} />,
-    },
-    {
-      id: "circle",
-      icon: <FaRegCircle size={22} />,
-    },
-    {
-      id: "line",
-      icon: <TbStrokeStraight size={20} />,
-    },
-    {
-      id: "arrow",
-      icon: <IoArrowForwardOutline size={22} />,
-    },
-    {
-      id: "text",
-      icon: <CiText size={20} />,
-    },
-    {
-      id: "pencil",
-      icon: <FaPencil size={20} />,
-    },
-    {
-      id: "eraser",
-      icon: <CiEraser size={20} />,
-    },
-    {
-      id: "image",
-      icon: <MdOutlinePhoto size={20} />,
-    },
-    {
-      id: "fill",
-      icon: <MdOutlineWaterDrop size={20} />,
-    },
-    {
-      id: "background",
-      icon: <TbBackground size={20} />,
-    },
+
+  // preset swatches for the color popover — kept vivid & varied on purpose
+  const presetColors = [
+    "#ff3b30", "#ff9500", "#ffcc00", "#34c759",
+    "#00c7be", "#30b0c7", "#007aff", "#5856d6",
+    "#af52de", "#ff2d55", "#000000", "#ffffff",
   ];
+
+  // ---- grouped tools: each group renders ONE button, which expands ----
+  // ---- into a flyout of its own sub-options when clicked ----
+  const groups = {
+    view: {
+      id: "view",
+      options: [
+        { id: "cursor", icon: <HiOutlineCursorArrowRays size={20} />, label: "Cursor" },
+        { id: "hand", icon: <FaRegHandPaper size={20} />, label: "Hand" },
+      ],
+    },
+    shapes: {
+      id: "shapes",
+      options: [
+        { id: "rectangle", icon: <MdCheckBoxOutlineBlank size={20} />, label: "Rectangle" },
+        { id: "circle", icon: <FaRegCircle size={20} />, label: "Circle" },
+        { id: "line", icon: <TbStrokeStraight size={20} />, label: "Line" },
+        { id: "arrow", icon: <IoArrowForwardOutline size={20} />, label: "Arrow" },
+      ],
+    },
+    draw: {
+      id: "draw",
+      options: [
+        { id: "text", icon: <CiText size={20} />, label: "Text" },
+        { id: "pencil", icon: <FaPencil size={18} />, label: "Pencil" },
+      ],
+    },
+  };
+
+  const togglePanel = (id) => setOpenPanel((prev) => (prev === id ? null : id));
+
+  const selectFromGroup = (toolId) => {
+    setSelectedTool(toolId);
+    setOpenPanel(null);
+  };
+
+  // returns the icon to show on a group's main button:
+  // the currently selected tool's icon if it belongs to that group,
+  // otherwise the group's first option icon (sensible default)
+  const groupMainIcon = (group) => {
+    const active = group.options.find((o) => o.id === selectedTool);
+    return active ? active.icon : group.options[0].icon;
+  };
+
+  const isGroupActive = (group) => group.options.some((o) => o.id === selectedTool);
+
+  const buttonBaseClass = (active) => `
+    relative
+    flex
+    h-10
+    w-10
+    items-center
+    justify-center
+    rounded-xl
+    text-gray-300
+    transition-all
+    duration-200
+    ease-out
+    border
+    border-black
+    hover:bg-blue-600
+    hover:text-white
+    hover:scale-110
+    active:scale-95
+    active:bg-blue-700
+    touch-manipulation
+    ${active ? "bg-blue-600 text-white shadow-lg" : "bg-transparent"}
+  `;
 
   return (
     <>
-      <div className="fixed ">
-        <div className="flex flex-col gap-2 rounded-2xl border  bg-black p-0.5 shadow-2xl backdrop-blur-md">
-          {tools.map((tool) => (
+      <input
+        ref={photoref}
+        type="file"
+        accept="image/*,.pdf"
+        onChange={(e) => setFile(e.target.files[0])}
+        className="hidden"
+      />
+
+      <div ref={wrapperRef} className="fixed left-4 top-1/2 z-50 -translate-y-1/2">
+        <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-black p-1 shadow-[0_8px_30px_rgba(0,0,0,0.6)] backdrop-blur-md ring-1 ring-white/5">
+          {/* lock */}
+          <button
+            onClick={() => setLock(!lock)}
+            className={buttonBaseClass(false)}
+            title={lock ? "Unlock" : "Lock"}
+          >
+            {lock ? <CiLock size={20} /> : <CiUnlock size={20} />}
+          </button>
+
+          <div className="relative">
             <button
-              key={tool.id}
-              onClick={() => {
-                if (tool.id === "fill") {
-                  fillRef.current.click();
-                  return;
-                }
-
-                if (tool.id === "background") {
-                  backgroundRef.current.click();
-                  return;
-                }
-
-                if (tool.action) {
-                  tool.action();
-                } else {
-                  setSelectedTool(tool.id);
-                }
-              }}
-              className={`
-                flex
-                h-10
-                w-10
-                items-center
-                justify-center
-                rounded-xl
-                text-gray-300
-                transition-all
-                duration-200
-                ease-out
-                border
-                border-black
-                hover:bg-blue-600
-                hover:text-white
-                hover:scale-110
-                active:scale-95
-                active:bg-blue-700
-                touch-manipulation
-
-                ${
-                  selectedTool === tool.id
-                    ? "bg-blue-600 text-white shadow-lg"
-                    : "bg-transparent"
-                }
-            `}
+              onClick={() => togglePanel("view")}
+              className={buttonBaseClass(isGroupActive(groups.view) || openPanel === "view")}
+              title="Cursor / Hand"
             >
-              {tool.icon}
+              {groupMainIcon(groups.view)}
+              <IoChevronForward
+                size={9}
+                className="absolute bottom-0.5 right-0.5 opacity-70"
+              />
             </button>
-          ))}
+
+            {openPanel === "view" && (
+              <div className="absolute left-12 top-0 flex gap-1 rounded-xl border border-black bg-black p-1 shadow-2xl">
+                {groups.view.options.map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => selectFromGroup(opt.id)}
+                    title={opt.label}
+                    className={buttonBaseClass(selectedTool === opt.id)}
+                  >
+                    {opt.icon}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => togglePanel("shapes")}
+              className={buttonBaseClass(isGroupActive(groups.shapes) || openPanel === "shapes")}
+              title="Rectangle / Circle / Line"
+            >
+              {groupMainIcon(groups.shapes)}
+              <IoChevronForward
+                size={9}
+                className="absolute bottom-0.5 right-0.5 opacity-70"
+              />
+            </button>
+
+            {openPanel === "shapes" && (
+              <div className="absolute left-12 top-0 flex gap-1 rounded-xl border border-black bg-black p-1 shadow-2xl">
+                {groups.shapes.options.map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => selectFromGroup(opt.id)}
+                    title={opt.label}
+                    className={buttonBaseClass(selectedTool === opt.id)}
+                  >
+                    {opt.icon}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => togglePanel("draw")}
+              className={buttonBaseClass(isGroupActive(groups.draw) || openPanel === "draw")}
+              title="Text / Pencil"
+            >
+              {groupMainIcon(groups.draw)}
+              <IoChevronForward
+                size={9}
+                className="absolute bottom-0.5 right-0.5 opacity-70"
+              />
+            </button>
+
+            {openPanel === "draw" && (
+              <div className="absolute left-12 top-0 flex gap-1 rounded-xl border border-black bg-black p-1 shadow-2xl">
+                {groups.draw.options.map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => selectFromGroup(opt.id)}
+                    title={opt.label}
+                    className={buttonBaseClass(selectedTool === opt.id)}
+                  >
+                    {opt.icon}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => setSelectedTool(standalone.eraser.id)}
+            className={buttonBaseClass(selectedTool === standalone.eraser.id)}
+            title="Eraser"
+          >
+            {standalone.eraser.icon}
+          </button>
+
+          <button
+            onClick={() => photoref.current.click()}
+            className={buttonBaseClass(false)}
+            title="Insert Image"
+          >
+            {standalone.image.icon}
+          </button>
+
+          <div className="relative">
+            <button
+              onClick={() => togglePanel("colors")}
+              className={buttonBaseClass(openPanel === "colors")}
+              title="Fill / Background color"
+              style={
+                openPanel !== "colors"
+                  ? { background: `linear-gradient(135deg, ${fillColor}, ${backgroundColor})` }
+                  : undefined
+              }
+            >
+              <MdOutlineWaterDrop size={20} className="drop-shadow" />
+              <IoChevronForward
+                size={9}
+                className="absolute bottom-0.5 right-0.5 opacity-80 drop-shadow"
+              />
+            </button>
+
+            {openPanel === "colors" && (
+              <div className="absolute bottom-0 left-12 w-56 overflow-hidden rounded-2xl border border-white/10 bg-neutral-900 shadow-2xl">
+                {/* gradient header strip */}
+                <div
+                  className="h-2 w-full"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, #ff3b30, #ff9500, #ffcc00, #34c759, #00c7be, #007aff, #5856d6, #af52de, #ff2d55)",
+                  }}
+                />
+
+                <div className="p-3">
+                  {/* Fill color */}
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Fill
+                  </p>
+                  <label className="relative mb-2 flex w-full cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-neutral-800 px-2 py-1.5 transition hover:border-blue-400 hover:bg-neutral-700">
+                    <span
+                      className="h-7 w-7 shrink-0 rounded-lg border-2 border-white/20 shadow-[0_0_0_1px_rgba(0,0,0,0.4)]"
+                      style={{ backgroundColor: fillColor }}
+                    />
+                    <span className="text-xs font-medium uppercase tracking-wide text-gray-200">
+                      {fillColor}
+                    </span>
+                    <span className="ml-auto rounded-md bg-neutral-900 px-1.5 py-0.5 text-[10px] text-gray-400">
+                      custom
+                    </span>
+                    <input
+                      type="color"
+                      value={fillColor}
+                      onChange={(e) => setFillColor(e.target.value)}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    />
+                  </label>
+                  <div className="mb-3 grid grid-cols-6 gap-1.5">
+                    {presetColors.map((c) => (
+                      <button
+                        key={`fill-${c}`}
+                        onClick={() => setFillColor(c)}
+                        title={c}
+                        className={`h-6 w-6 rounded-full border-2 transition hover:scale-110 ${
+                          fillColor.toLowerCase() === c
+                            ? "border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.5)]"
+                            : "border-white/20"
+                        }`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Background color */}
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Background
+                  </p>
+                  <label className="relative mb-2 flex w-full cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-neutral-800 px-2 py-1.5 transition hover:border-blue-400 hover:bg-neutral-700">
+                    <span
+                      className="h-7 w-7 shrink-0 rounded-lg border-2 border-white/20 shadow-[0_0_0_1px_rgba(0,0,0,0.4)]"
+                      style={{ backgroundColor: backgroundColor }}
+                    />
+                    <span className="text-xs font-medium uppercase tracking-wide text-gray-200">
+                      {backgroundColor}
+                    </span>
+                    <span className="ml-auto rounded-md bg-neutral-900 px-1.5 py-0.5 text-[10px] text-gray-400">
+                      custom
+                    </span>
+                    <input
+                      type="color"
+                      value={backgroundColor}
+                      onChange={(e) => setBackgroundColor(e.target.value)}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    />
+                  </label>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {presetColors.map((c) => (
+                      <button
+                        key={`bg-${c}`}
+                        onClick={() => setBackgroundColor(c)}
+                        title={c}
+                        className={`h-6 w-6 rounded-full border-2 transition hover:scale-110 ${
+                          backgroundColor.toLowerCase() === c
+                            ? "border-blue-400 shadow-[0_0_0_2px_rgba(59,130,246,0.5)]"
+                            : "border-white/20"
+                        }`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>

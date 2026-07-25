@@ -1,14 +1,35 @@
-import React from 'react'
-import Canvas from './Component/Canvas'
-import Header from './Component/Header'
+// import React, { useState } from "react";
+// import Footer from "./Component/Footer";
+
+// function App() {
+//   const [x, setX] = useState(0);
+
+//   return (
+//     <>
+//       <h1>{x}</h1>
+
+//       <Footer sendX={setX} />
+//     </>
+//   );
+// }
+
+// export default App;
+
+import React, { useState } from "react";
+import Header from "./Component/Header";
 
 const App = () => {
-  return (
-    // <div><Canvas/></div>
-    <div className="">
-      <Header/>
-    </div>
-  )
-}
+  const [data, setData] = useState({});
 
-export default App
+  const sentValu = (value) => {
+    console.log(value);
+    setData(value);
+  };
+  return (
+    <>
+      <Header sentValu={sentValu} />
+    </>
+  );
+};
+
+export default App;
