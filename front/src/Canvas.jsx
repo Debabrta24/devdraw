@@ -100,7 +100,7 @@ export default function Canvas() {
         height: "100vh",
         display: "block",
         touchAction: "none",
-        background: "#fff",
+        background: "#050505",
         cursor: "crosshair",
       }}
     />
