@@ -94,7 +94,7 @@ export default function Canvas() {
     }
 
     function widthFor(pressure) {
-      return (0 + pressure * 0.8) / viewport.current.scale;
+      return (1 + pressure * 0) / viewport.current.scale;
     }
 
     function pinchInfo() {
