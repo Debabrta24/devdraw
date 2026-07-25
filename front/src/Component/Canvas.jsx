@@ -120,7 +120,7 @@ export default function Canvas() {
         for (let i = 1; i < pts.length; i++) {
           const a = pts[i - 1];
           const b = pts[i];
-          ctx.lineWidth = 3 + b.pressure * 1.2;
+          ctx.lineWidth = 0.5 + b.pressure * 0.1;
           ctx.beginPath();
           ctx.moveTo(a.x, a.y);
           ctx.lineTo(b.x, b.y);
@@ -334,8 +334,8 @@ export default function Canvas() {
         height: "100vh",
         display: "block",
         touchAction: "none",
-        background: "#050505",
-        cursor: "crosshair",
+        background: "#130248",
+        cursor: "mouse",
       }}
     />
   );
