@@ -21,12 +21,13 @@ export default function Canvas() {
 
   const [bgColor, setBgcolor] = useState("blue");
   const [linecolor, setLinecolor] = useState("green");
-
+  const [lineWidth, setLinewidth] = useState(2);
   // Refs mirroring the color state so the render loop (set up once in the
   // effect below) always reads the *current* colors instead of the values
   // captured at mount time.
   const bgColorRef = useRef(bgColor);
   const lineColorRef = useRef(linecolor);
+  const linewidthRef = useRef(lineWidth);
 
   useEffect(() => {
     bgColorRef.current = bgColor;
@@ -37,6 +38,9 @@ export default function Canvas() {
     lineColorRef.current = linecolor;
   }, [linecolor]);
 
+  useEffect(() => {
+    linewidthRef.current = lineWidth;
+  }, [lineWidth]);
   // Lock the page down so mobile browsers don't hijack pinch/scroll
   // gestures before they reach the canvas.
   useEffect(() => {
@@ -138,7 +142,7 @@ export default function Canvas() {
         for (let i = 1; i < pts.length; i++) {
           const a = pts[i - 1];
           const b = pts[i];
-          ctx.lineWidth = 0.5 + b.pressure * 0.1;
+          ctx.lineWidth = (linewidthRef.current/2)+b.pressure * 0.1;
           ctx.beginPath();
           ctx.moveTo(a.x, a.y);
           ctx.lineTo(b.x, b.y);
@@ -345,9 +349,10 @@ export default function Canvas() {
   }, []);
 
   const sentValu = (value) => {
-    console.log(value)
+    console.log(value);
     setBgcolor(value.backgroundColor);
     setLinecolor(value.fillColor);
+    setLinewidth(value.stockWidth);
   };
 
   return (
