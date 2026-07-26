@@ -8,11 +8,13 @@ import {
   MdOutlinePhoto,
   MdOutlineWaterDrop,
   MdCheckBoxOutlineBlank,
+  MdUndo,
+  MdRedo,
 } from "react-icons/md";
 import { IoArrowForwardOutline, IoChevronForward } from "react-icons/io5";
 import { TbStrokeStraight } from "react-icons/tb";
 
-const Header = ({ sentValu }) => {
+const Header = ({ sentValu, onUndo, onRedo }) => {
   const [lock, setLock] = useState(false);
   const [selectedTool, setSelectedTool] = useState("pencil");
   const [fillColor, setFillColor] = useState("#38de00");
@@ -42,12 +44,6 @@ const Header = ({ sentValu }) => {
     });
   }, [selectedTool, fillColor, backgroundColor, file, opacity, stockWidth]);
 
-  // close any open flyout / popover when clicking outside the toolbar.
-  // uses the "click" event (not "mousedown") on purpose: a click always fires
-  // AFTER any blur caused by the focus shift, so colorPickerActive has already
-  // settled to false by the time we check it here — letting the user swipe
-  // freely through the native color picker without the panel closing mid-drag,
-  // while a click on the canvas right after still closes it reliably.
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (colorPickerActive) return;
@@ -65,15 +61,12 @@ const Header = ({ sentValu }) => {
     image: { id: "image", icon: <MdOutlinePhoto size={20} /> },
   };
 
-  // preset swatches for the color popover — kept vivid & varied on purpose
   const presetColors = [
     "#ff3b30", "#ff9500", "#ffcc00", "#34c759",
     "#00c7be", "#30b0c7", "#007aff", "#5856d6",
     "#af52de", "#ff2d55", "#000000", "#ffffff",
   ];
 
-  // ---- grouped tools: each group renders ONE button, which expands ----
-  // ---- into a flyout of its own sub-options when clicked ----
   const groups = {
     view: {
       id: "view",
@@ -142,7 +135,10 @@ const Header = ({ sentValu }) => {
         ref={photoref}
         type="file"
         accept="image/*,.pdf"
-        onChange={(e) => setFile(e.target.files[0])}
+        onChange={(e) => {
+          setFile(e.target.files[0]);
+          e.target.value = ""; // so picking the same file twice still fires change
+        }}
         className="hidden"
       />
 
@@ -155,6 +151,22 @@ const Header = ({ sentValu }) => {
             title={lock ? "Unlock" : "Lock"}
           >
             {lock ? <CiLock size={20} /> : <CiUnlock size={20} />}
+          </button>
+
+          {/* undo / redo */}
+          <button
+            onClick={() => onUndo && onUndo()}
+            className={buttonBaseClass(false)}
+            title="Undo (Ctrl+Z)"
+          >
+            <MdUndo size={20} />
+          </button>
+          <button
+            onClick={() => onRedo && onRedo()}
+            className={buttonBaseClass(false)}
+            title="Redo (Ctrl+Y)"
+          >
+            <MdRedo size={20} />
           </button>
 
           {/* view group: cursor / hand */}
@@ -187,12 +199,12 @@ const Header = ({ sentValu }) => {
             )}
           </div>
 
-          {/* shapes group: rectangle / circle / line */}
+          {/* shapes group: rectangle / circle / line / arrow */}
           <div className="relative">
             <button
               onClick={() => togglePanel("shapes")}
               className={buttonBaseClass(isGroupActive(groups.shapes) || openPanel === "shapes")}
-              title="Rectangle / Circle / Line"
+              title="Rectangle / Circle / Line / Arrow"
             >
               {groupMainIcon(groups.shapes)}
               <IoChevronForward
@@ -258,7 +270,10 @@ const Header = ({ sentValu }) => {
 
           {/* image (standalone) */}
           <button
-            onClick={() => photoref.current.click()}
+            onClick={() => {
+              setSelectedTool("image");
+              photoref.current.click();
+            }}
             className={buttonBaseClass(false)}
             title="Insert Image"
           >
@@ -286,7 +301,6 @@ const Header = ({ sentValu }) => {
 
             {openPanel === "colors" && (
               <div className="absolute bottom-0 left-12 w-56 overflow-hidden rounded-2xl border border-white/10 bg-neutral-900 shadow-2xl">
-                {/* gradient header strip */}
                 <div
                   className="h-2 w-full"
                   style={{
@@ -296,7 +310,6 @@ const Header = ({ sentValu }) => {
                 />
 
                 <div className="p-3">
-                  {/* Fill color */}
                   <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     Fill
                   </p>
@@ -336,7 +349,6 @@ const Header = ({ sentValu }) => {
                     ))}
                   </div>
 
-                  {/* Opacity */}
                   <div className="mb-3">
                     <div className="mb-1 flex items-center justify-between">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
@@ -360,7 +372,6 @@ const Header = ({ sentValu }) => {
                     />
                   </div>
 
-                  {/* Background color */}
                   <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     Background
                   </p>
@@ -400,7 +411,6 @@ const Header = ({ sentValu }) => {
                     ))}
                   </div>
 
-                  {/* Stroke / Stock width */}
                   <div className="mt-3">
                     <div className="mb-1 flex items-center justify-between">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
