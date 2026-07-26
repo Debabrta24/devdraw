@@ -7,21 +7,16 @@ const SAVE_DEBOUNCE_MS = 300;
 export default function Canvas() {
   const canvasRef = useRef(null);
   const rectRef = useRef({ left: 0, top: 0 });
-
   const strokes = useRef([]); // {points:[{x,y,pressure}], color}
   const currentStroke = useRef(null);
-
   const view = useRef({ x: 0, y: 0, scale: 1 }); // screen = world*scale + offset
-
   const drawing = useRef(false);
   const activePointers = useRef(new Map()); // pointerId -> {x,y}
   const pinch = useRef(null);
-
   const dirty = useRef(true);
-
-  const [bgColor, setBgcolor] = useState("blue");
+  const [bgColor, setBgcolor] = useState("Black");
   const [linecolor, setLinecolor] = useState("green");
-  const [lineWidth, setLinewidth] = useState(2);
+  const [lineWidth, setLinewidth] = useState(6);
   // Refs mirroring the color state so the render loop (set up once in the
   // effect below) always reads the *current* colors instead of the values
   // captured at mount time.
@@ -142,8 +137,9 @@ export default function Canvas() {
         for (let i = 1; i < pts.length; i++) {
           const a = pts[i - 1];
           const b = pts[i];
-          ctx.lineWidth = (linewidthRef.current/2)+b.pressure * 0.1;
-          ctx.beginPath();
+          ctx.lineWidth = linewidthRef.current / 2 + b.pressure * 0.1; //width of strok
+          // ctx.globalAlpha = 0.5;
+          ctx.beginPath(); 
           ctx.moveTo(a.x, a.y);
           ctx.lineTo(b.x, b.y);
           ctx.stroke();
@@ -237,7 +233,9 @@ export default function Canvas() {
         const w = toWorld(pos.x, pos.y);
         currentStroke.current = {
           color: lineColorRef.current,
+          // opacity:0.1,
           points: [{ x: w.x, y: w.y, pressure: pos.pressure }],
+          
         };
         markDirty();
       } else if (activePointers.current.size === 2) {

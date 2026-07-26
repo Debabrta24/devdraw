@@ -15,11 +15,11 @@ import { TbStrokeStraight } from "react-icons/tb";
 const Header = ({ sentValu }) => {
   const [lock, setLock] = useState(false);
   const [selectedTool, setSelectedTool] = useState("pencil");
-  const [fillColor, setFillColor] = useState("#ff0000");
-  const [backgroundColor, setBackgroundColor] = useState("#ffffff");
+  const [fillColor, setFillColor] = useState("#38de00");
+  const [backgroundColor, setBackgroundColor] = useState("#000000");
   const [file, setFile] = useState(null);
   const [opacity, setOpacity] = useState(100);
-  const [stockWidth, setStockWidth] = useState(2);
+  const [stockWidth, setStockWidth] = useState(6);
 
   // which flyout / popover is currently open ("view" | "shapes" | "draw" | "colors" | null)
   const [openPanel, setOpenPanel] = useState(null);
